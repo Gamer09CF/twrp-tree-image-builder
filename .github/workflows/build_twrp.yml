@@ -1,23 +1,26 @@
-name: Build TWRP Image
+name: Automated TWRP Build
 
 on:
   workflow_dispatch:
     inputs:
-      DEVICE_TREE_URL:
-        description: 'TWRP Device Tree Repository URL'
+      DEVICE_MANIFEST_URL:
+        description: 'URL to the device-specific manifest file (e.g., device.mk)'
         required: true
         type: string
-      DEVICE_TREE_BRANCH:
-        description: 'TWRP Device Tree Branch'
-        required: true
-        default: 'android-12.1' # Adjust as needed
-        type: string
-      DEVICE_PATH:
-        description: 'Path to the device folder in the tree (e.g., device/xiaomi/redmi_note_8)'
+      BOARD_CONFIG_URL:
+        description: 'URL to the BoardConfig.mk file'
         required: true
         type: string
-      DEVICE_NAME:
-        description: 'Device Codename (e.g., redmi_note_8)'
+      RECOVERY_FSTAB_URL:
+        description: 'URL to the recovery.fstab file'
+        required: true
+        type: string
+      VENDOR_SETUP_URL:
+        description: 'URL to the vendorsetup.sh file'
+        required: true
+        type: string
+      DEVICE_CODE_NAME:
+        description: 'Device Codename (used for lunch command)'
         required: true
         type: string
       TWRP_VERSION:
@@ -33,7 +36,7 @@ on:
 
 jobs:
   build:
-    name: Build TWRP for ${{ inputs.DEVICE_NAME }}
+    name: Build TWRP for ${{ inputs.DEVICE_CODE_NAME }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -44,19 +47,30 @@ jobs:
           sudo apt update
           sudo apt install -y git aria2 wget software-properties-common bc bison build-essential ccache curl flex g++ gcc gettext jq libelf-dev liblz4-tool libncurses5-dev libssl-dev libxml2-utils lzop pngcrush rsync schedtool squashfs-tools unzip xz-utils zip zlib1g-dev
 
+      - name: Create Device Directory
+        run: |
+          mkdir -p twrp_source/android/device/generic/${{ inputs.DEVICE_CODE_NAME }}
+
+      - name: Download Device Files
+        run: |
+          cd twrp_source/android/device/generic/${{ inputs.DEVICE_CODE_NAME }}
+          wget ${{ inputs.DEVICE_MANIFEST_URL }} -O Android.mk
+          wget ${{ inputs.BOARD_CONFIG_URL }} -O BoardConfig.mk
+          wget ${{ inputs.RECOVERY_FSTAB_URL }} -O recovery.fstab
+          wget ${{ inputs.VENDOR_SETUP_URL }} -O vendorsetup.sh
+          chmod +x vendorsetup.sh
+
       - name: Clone TWRP Source
         run: |
-          mkdir twrp_source
           cd twrp_source
           git clone --depth=1 https://github.com/TeamWin/android.git -b twrp-${{ inputs.TWRP_VERSION }}
           cd android
-          git clone --depth=1 ${{ inputs.DEVICE_TREE_URL }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ${{ inputs.DEVICE_PATH }}
 
       - name: Initialize Build
         run: |
           cd twrp_source/android
           source build/envsetup.sh
-          lunch ${{ inputs.DEVICE_NAME }}-eng
+          lunch twrp_${{ inputs.DEVICE_CODE_NAME }}-eng
 
       - name: Start Build
         run: |
@@ -67,15 +81,18 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: twrp-image-${{ inputs.DEVICE_NAME }}-${{ github.run_id }}
-          path: twrp_source/android/out/target/product/${{ inputs.DEVICE_NAME }}/recovery.img
+          name: twrp-image-${{ inputs.DEVICE_CODE_NAME }}-${{ github.run_id }}
+          path: twrp_source/android/out/target/product/${{ inputs.DEVICE_CODE_NAME }}/recovery.img
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: twrp_source/android/out/target/product/${{ inputs.DEVICE_NAME }}/recovery.img
-          name: TWRP for ${{ inputs.DEVICE_NAME }} - Build ${{ github.run_id }}
+          files: twrp_source/android/out/target/product/${{ inputs.DEVICE_CODE_NAME }}/recovery.img
+          name: TWRP for ${{ inputs.DEVICE_CODE_NAME }} - Build ${{ github.run_id }}
           tag_name: ${{ github.run_id }}
           body: |
-            Unofficial TWRP build for ${{ inputs.DEVICE_NAME }}
-            Device Tree: ${{ inputs.DEVICE_TREE_URL }}/tree/${{ inputs.DEVICE_TREE_BRANCH }}
+            Automated TWRP build for ${{ inputs.DEVICE_CODE_NAME }}
+            Device Manifest: ${{ inputs.DEVICE_MANIFEST_URL }}
+            BoardConfig: ${{ inputs.BOARD_CONFIG_URL }}
+            recovery.fstab: ${{ inputs.RECOVERY_FSTAB_URL }}
+            vendorsetup.sh: ${{ inputs.VENDOR_SETUP_URL }}
