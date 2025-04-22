@@ -21,7 +21,13 @@ jobs:
           sudo apt update
           sudo apt install cpio python3 pip
           pip3 install twrpdtgen
-          sudo apt install repo
+          
+      - name: Install Repo
+        run: |
+          mkdir -p ~/.bin
+          PATH="${HOME}/.bin:${PATH}"
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
+          chmod a+rx ~/.bin/repo
       - name: Clone TWRP Source
         run: |
           mkdir work
