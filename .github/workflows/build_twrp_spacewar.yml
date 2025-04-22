@@ -44,6 +44,8 @@ jobs:
       - name: Initialize Build
         run: |
           repo sync
+          source build/envsetup.sh
+          lunch twrp_Spacewar-eng
       - name: Start Build
         run: |
           cd twrp_source/android
