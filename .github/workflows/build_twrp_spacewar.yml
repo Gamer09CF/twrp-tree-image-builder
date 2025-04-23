@@ -4,10 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       TWRP_VERSION:
-        description: 'TWRP Version to Build. (twrp-14 or twrp-12.1 or twrp-11'
+        description: 'TWRP Version to Build.'
         required: true
         default: '14'
-        type: string
+        type: options
+          - twrp-14
+          - twrp-12.1
+          - twrp-11
 jobs:
   build:
     name: Build TWRP for Spacewar
@@ -20,7 +23,6 @@ jobs:
         run: |
           sudo apt update
           sudo apt install cpio python3 pip
-          pip3 install twrpdtgen
           
       - name: Install Repo
         run: |
@@ -30,40 +32,35 @@ jobs:
           chmod a+rx ~/.bin/repo
       - name: Clone TWRP Source
         run: |
-          mkdir work
-          cd work
           repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b ${{ inputs.TWRP_VERSION }}
-
+          repo sync -j$(nproc)
       - name: Clone TWRP Device Tree
         run: |
-          mkdir device
-          mkdir device/nothing
-          mkdir device/nothing/Spacewar
-          git clone https://github.com/DeathgamerB/recovery_device_nothing_Spacewar/tree/master device/nothing/Spacewar/
-      
+          cd twrp_source
+          mkdir -p device/nothing/Spacewar
+          git clone https://github.com/Gamer09CF/recovery_device_nothing_Spacewar.git device/nothing/Spacewar/
       - name: Initialize Build
         run: |
-          repo sync
           source build/envsetup.sh
           lunch twrp_Spacewar-eng
       - name: Start Build
         run: |
-          cd twrp_source/android
+          cd android
           make clean
-          make bootimage -j$(nproc)
+          make recoveryimage
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: twrp-image-Spacewar-${{ github.run_id }}
-          path: twrp_source/android/out/target/product/Spacewar/boot.img
+          path: twrp_source/android/out/target/product/Spacewar/recovery.img
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: twrp_source/android/out/target/product/Spacewar/boot.img
+          files: android/out/target/product/Spacewar/recovery.img
           name: TWRP for Spacewar - Build ${{ github.run_id }}
           tag_name: ${{ github.run_id }}
           body: |
-            Unofficial TWRP build for ${{ inputs.DEVICE_NAME }}
-            Device Tree: https://github.com/DeathgamerB/recovery_device_nothing_Spacewar/tree/master
+            Unofficial TWRP build for Spacewar
+            Device Tree: https://github.com/Gamer09CF/recovery_device_nothing_Spacewar/tree/master
