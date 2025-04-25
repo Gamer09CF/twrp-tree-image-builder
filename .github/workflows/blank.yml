@@ -1,0 +1,74 @@
+name: Build TWRP
+
+on:
+  push:
+    branches: [ main ] # Trigger on pushes to the main branch
+  pull_request:
+    branches: [ main ] # Trigger on pull requests to the main branch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # Use Ubuntu for the build environment
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3 # Checkout your repository's code
+
+      - name: Set up Environment
+        run: |
+          # Install dependencies (these might need adjustment)
+          sudo apt-get update
+          sudo apt-get install -y git  # Ensure git is installed
+          sudo apt-get install -y python3 # Ensure python3 is installed
+          sudo apt-get install -y bc  # Needed for some Android build scripts
+          sudo apt-get install -y openjdk-11-jdk # Install Java JDK 11
+          # Install any other dependencies needed for your build
+
+      - name: Initialize Repo
+        run: |
+          # Initialize repo (adjust manifest URL and branch as needed)
+          mkdir ~/twrp
+          cd ~/twrp
+          repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-10.0-deprecated # Or a more appropriate branch
+          repo sync -j$(nproc)
+
+      - name: Copy Device Tree
+        run: |
+          # Copy your device tree (adjust paths if needed)
+          mkdir -p ~/twrp/device/nothing/Spacewar
+          cp -r device/nothing/Spacewar ~/twrp/device/nothing/Spacewar
+
+      - name: Set up TWRP Build Environment
+        run: |
+          # Set up the Android build environment
+          cd ~/twrp
+          source build/envsetup.sh
+          lunch omni_Spacewar-eng # Or your device's lunch target
+
+      - name: Modify BoardConfig.mk
+        run: |
+          # Modify BoardConfig.mk (adjust paths and flags as needed)
+          echo "TW_THEME := portrait_hdpi" >> ~/twrp/device/nothing/Spacewar/BoardConfig.mk
+          echo "RECOVERY_SDCARD_ON_DATA := true" >> ~/twrp/device/nothing/Spacewar/BoardConfig.mk # Or false
+          echo "BOARD_HAS_NO_REAL_SDCARD := true" >> ~/twrp/device/nothing/Spacewar/BoardConfig.mk # Or false
+          # Add any other necessary TWRP flags
+
+      - name: Copy twrp.fstab (if needed)
+        run: |
+          # Copy twrp.fstab (if you have one)
+          if [ -f "device/nothing/Spacewar/twrp.fstab" ]; then
+            mkdir -p ~/twrp/recovery/root/etc
+            cp device/nothing/Spacewar/twrp.fstab ~/twrp/recovery/root/etc/twrp.fstab
+            echo "PRODUCT_COPY_FILES += device/nothing/Spacewar/twrp.fstab:recovery/root/etc/twrp.fstab" >> ~/twrp/device/nothing/Spacewar/device.mk
+          fi
+
+      - name: Build TWRP
+        run: |
+          # Build TWRP
+          cd ~/twrp
+          make clean && make -j$(nproc) recoveryimage # Or make -j$(nproc) bootimage for Samsung
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: twrp-recovery
+          path: ~/twrp/out/target/product/Spacewar/recovery.img
